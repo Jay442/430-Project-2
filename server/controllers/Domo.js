@@ -46,9 +46,9 @@ const deleteDomo = async (req, res) => {
     if (!req.body.domoId) {
       return res.status(400).json({ error: 'Domo ID is required!' });
     }
-    const result = await Domo.deleteOne({ 
-      _id: req.body.domoId, 
-      owner: req.session.account._id 
+    const result = await Domo.deleteOne({
+      _id: req.body.domoId,
+      owner: req.session.account._id,
     });
 
     if (result.deletedCount === 0) {

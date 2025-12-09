@@ -8,13 +8,15 @@ const createTournament = async (req, res) => {
   console.log('=== CREATE TOURNAMENT REQUEST ===');
   console.log('Request body:', req.body);
   console.log('Session:', req.session);
-  console.log('Account ID:', req.session?.account?._id);
-  
+
+  const accountId = req.session && req.session.account && req.session.account._id;
+  console.log('Account ID:', accountId);
+
   if (!req.body.name || !req.body.game || !req.body.maxParticipants) {
     console.log('Missing fields:', {
       name: req.body.name,
       game: req.body.game,
-      maxParticipants: req.body.maxParticipants
+      maxParticipants: req.body.maxParticipants,
     });
     return res.status(400).json({ error: 'All fields are required!' });
   }
@@ -22,12 +24,12 @@ const createTournament = async (req, res) => {
   try {
     // Generate initial participants
     const participants = [];
-    const maxParticipants = parseInt(req.body.maxParticipants);
+    const maxParticipants = parseInt(req.body.maxParticipants, 10);
     console.log('Max participants (parsed):', maxParticipants);
-    
+
     const participantCount = Math.min(maxParticipants, 8);
     console.log('Creating participants:', participantCount);
-    
+
     for (let i = 1; i <= participantCount; i++) {
       participants.push(`Player ${i}`);
     }
@@ -36,7 +38,7 @@ const createTournament = async (req, res) => {
     // Generate bracket matches
     const bracketType = req.body.bracketType || 'single-elimination';
     console.log('Bracket type:', bracketType);
-    
+
     console.log('Generating bracket...');
     const matches = models.Tournament.generateBracket(participants, bracketType);
     console.log('Generated matches:', matches.length);
@@ -45,42 +47,42 @@ const createTournament = async (req, res) => {
     const tournamentData = {
       name: req.body.name,
       game: req.body.game,
-      maxParticipants: maxParticipants,
-      bracketType: bracketType,
-      participants: participants,
-      matches: matches,
-      owner: req.session.account._id
+      maxParticipants,
+      bracketType,
+      participants,
+      matches,
+      owner: req.session.account._id,
     };
 
     console.log('Tournament data to save:', tournamentData);
 
     const newTournament = new models.Tournament(tournamentData);
     console.log('Attempting to save tournament...');
-    
+
     await newTournament.save();
     console.log('Tournament saved successfully! ID:', newTournament._id);
 
-    return res.json({ 
+    return res.json({
       tournament: newTournament,
-      redirect: `/maker`
+      redirect: '/maker',
     });
   } catch (err) {
     console.error('=== ERROR CREATING TOURNAMENT ===');
     console.error('Error message:', err.message);
     console.error('Error stack:', err.stack);
-    
+
     // Check for specific MongoDB validation errors
     if (err.name === 'ValidationError') {
       console.error('Validation errors:', err.errors);
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Validation error',
-        details: Object.values(err.errors).map(e => e.message).join(', ')
+        details: Object.values(err.errors).map((e) => e.message).join(', '),
       });
     }
-    
-    return res.status(400).json({ 
+
+    return res.status(400).json({
       error: 'An error occurred',
-      details: err.message 
+      details: err.message,
     });
   }
 };
@@ -108,7 +110,7 @@ const deleteTournament = async (req, res) => {
 
     const tournament = await models.Tournament.findOne({
       _id: req.body.tournamentId,
-      owner: req.session.account._id
+      owner: req.session.account._id,
     });
 
     if (!tournament) {
@@ -125,7 +127,9 @@ const deleteTournament = async (req, res) => {
 
 const updateMatch = async (req, res) => {
   try {
-    const { matchId, score1, score2, winner } = req.body;
+    const {
+      matchId, score1, score2, winner,
+    } = req.body;
 
     if (!matchId) {
       return res.status(400).json({ error: 'Match ID required' });
@@ -134,7 +138,7 @@ const updateMatch = async (req, res) => {
     // Find tournament containing this match
     const tournament = await models.Tournament.findOne({
       'matches._id': matchId,
-      owner: req.session.account._id
+      owner: req.session.account._id,
     });
 
     if (!tournament) {
@@ -142,7 +146,7 @@ const updateMatch = async (req, res) => {
     }
 
     // Update the match
-    const matchIndex = tournament.matches.findIndex(match => match._id.toString() === matchId);
+    const matchIndex = tournament.matches.findIndex((match) => match._id.toString() === matchId);
     if (matchIndex === -1) {
       return res.status(404).json({ error: 'Match not found' });
     }
@@ -155,9 +159,9 @@ const updateMatch = async (req, res) => {
     // Update tournament status
     await tournament.save();
 
-    return res.json({ 
+    return res.json({
       message: 'Match updated successfully',
-      tournament: tournament
+      tournament,
     });
   } catch (err) {
     console.error('Error updating match:', err);
@@ -170,5 +174,5 @@ module.exports = {
   createTournament,
   getTournaments,
   deleteTournament,
-  updateMatch
+  updateMatch,
 };

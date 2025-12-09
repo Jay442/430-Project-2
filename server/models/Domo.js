@@ -15,7 +15,7 @@ const DomoSchema = new mongoose.Schema({
     min: 0,
     required: true,
   },
-    level: {
+  level: {
     type: Number,
     min: 0,
     required: true,
