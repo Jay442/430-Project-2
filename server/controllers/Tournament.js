@@ -4,45 +4,129 @@ const makerPage = (req, res) => {
   res.render('app');
 };
 
+// Helper function to update subsequent matches
+const updateSubsequentMatches = async (tournament, match, winner) => {
+  const { round } = match;
+  const { matchNumber } = match;
+  const bracketType = match.bracketType || 'winners';
+
+  if (tournament.bracketType === 'single-elimination') {
+    const nextRound = round + 1;
+    const nextMatchPosition = Math.ceil(matchNumber / 2);
+
+    const nextMatch = tournament.matches.find((m) => m.round === nextRound
+      && Math.ceil(m.matchNumber / 2) === nextMatchPosition);
+
+    if (nextMatch) {
+      const isPlayer1Slot = matchNumber % 2 === 1;
+
+      if (isPlayer1Slot) {
+        nextMatch.player1 = winner;
+      } else {
+        nextMatch.player2 = winner;
+      }
+
+      if (nextMatch.player1 !== 'TBD' && nextMatch.player2 !== 'TBD') {
+        nextMatch.status = 'pending';
+      }
+    }
+  } else if (tournament.bracketType === 'double-elimination') {
+    if (bracketType === 'winners') {
+      const nextWinnersRound = round + 1;
+      const nextMatchPosition = Math.ceil(matchNumber / 2);
+
+      const nextWinnersMatch = tournament.matches.find((m) => m.round === nextWinnersRound
+        && m.bracketType === 'winners'
+        && Math.ceil(m.matchNumber / 2) === nextMatchPosition);
+
+      if (nextWinnersMatch) {
+        const isPlayer1Slot = matchNumber % 2 === 1;
+        if (isPlayer1Slot) {
+          nextWinnersMatch.player1 = winner;
+        } else {
+          nextWinnersMatch.player2 = winner;
+        }
+
+        if (nextWinnersMatch.player1 !== 'TBD' && nextWinnersMatch.player2 !== 'TBD') {
+          nextWinnersMatch.status = 'pending';
+        }
+      }
+
+      const loser = match.player1 === winner ? match.player2 : match.player1;
+      if (loser && loser !== 'TBD' && loser !== null) {
+        const losersMatch = tournament.matches.find((m) => m.bracketType === 'losers'
+          && m.round === round
+          && (m.player1 === 'TBD' || m.player2 === 'TBD'));
+
+        if (losersMatch) {
+          if (losersMatch.player1 === 'TBD') {
+            losersMatch.player1 = loser;
+          } else if (losersMatch.player2 === 'TBD') {
+            losersMatch.player2 = loser;
+          }
+
+          if (losersMatch.player1 !== 'TBD' && losersMatch.player2 !== 'TBD') {
+            losersMatch.status = 'pending';
+          }
+        }
+      }
+    } else if (bracketType === 'losers') {
+      const nextLosersRound = round + 1;
+
+      const nextLosersMatch = tournament.matches.find((m) => m.bracketType === 'losers'
+        && m.round === nextLosersRound
+        && (m.player1 === 'TBD' || m.player2 === 'TBD'));
+
+      if (nextLosersMatch) {
+        if (nextLosersMatch.player1 === 'TBD') {
+          nextLosersMatch.player1 = winner;
+        } else if (nextLosersMatch.player2 === 'TBD') {
+          nextLosersMatch.player2 = winner;
+        }
+
+        if (nextLosersMatch.player1 !== 'TBD' && nextLosersMatch.player2 !== 'TBD') {
+          nextLosersMatch.status = 'pending';
+        }
+      }
+    }
+  }
+
+  return tournament;
+};
+
 const createTournament = async (req, res) => {
-  console.log('=== CREATE TOURNAMENT REQUEST ===');
-  console.log('Request body:', req.body);
-  console.log('Session:', req.session);
-
-  const accountId = req.session && req.session.account && req.session.account._id;
-  console.log('Account ID:', accountId);
-
   if (!req.body.name || !req.body.game || !req.body.maxParticipants) {
-    console.log('Missing fields:', {
-      name: req.body.name,
-      game: req.body.game,
-      maxParticipants: req.body.maxParticipants,
-    });
     return res.status(400).json({ error: 'All fields are required!' });
   }
 
+  // Check for all required body params
   try {
-    // Generate initial participants
-    const participants = [];
+    let participants = [];
     const maxParticipants = parseInt(req.body.maxParticipants, 10);
-    console.log('Max participants (parsed):', maxParticipants);
 
-    const participantCount = Math.min(maxParticipants, 8);
-    console.log('Creating participants:', participantCount);
+    if (req.body.participants && Array.isArray(req.body.participants)) {
+      participants = req.body.participants.map((name, index) => {
+        if (!name || name.trim() === '') {
+          return `Player ${index + 1}`;
+        }
+        return name.trim();
+      });
 
-    for (let i = 1; i <= participantCount; i++) {
-      participants.push(`Player ${i}`);
+      if (participants.length > maxParticipants) {
+        participants = participants.slice(0, maxParticipants);
+      } else if (participants.length < maxParticipants) {
+        for (let i = participants.length; i < maxParticipants; i++) {
+          participants.push(`Player ${i + 1}`);
+        }
+      }
+    } else {
+      for (let i = 1; i <= maxParticipants; i++) {
+        participants.push(`Player ${i}`);
+      }
     }
-    console.log('Participants array:', participants);
 
-    // Generate bracket matches
     const bracketType = req.body.bracketType || 'single-elimination';
-    console.log('Bracket type:', bracketType);
-
-    console.log('Generating bracket...');
     const matches = models.Tournament.generateBracket(participants, bracketType);
-    console.log('Generated matches:', matches.length);
-    console.log('Match structure (first match):', matches[0]);
 
     const tournamentData = {
       name: req.body.name,
@@ -54,26 +138,15 @@ const createTournament = async (req, res) => {
       owner: req.session.account._id,
     };
 
-    console.log('Tournament data to save:', tournamentData);
-
     const newTournament = new models.Tournament(tournamentData);
-    console.log('Attempting to save tournament...');
-
     await newTournament.save();
-    console.log('Tournament saved successfully! ID:', newTournament._id);
 
     return res.json({
       tournament: newTournament,
       redirect: '/maker',
     });
   } catch (err) {
-    console.error('=== ERROR CREATING TOURNAMENT ===');
-    console.error('Error message:', err.message);
-    console.error('Error stack:', err.stack);
-
-    // Check for specific MongoDB validation errors
     if (err.name === 'ValidationError') {
-      console.error('Validation errors:', err.errors);
       return res.status(400).json({
         error: 'Validation error',
         details: Object.values(err.errors).map((e) => e.message).join(', '),
@@ -89,15 +162,12 @@ const createTournament = async (req, res) => {
 
 const getTournaments = async (req, res) => {
   try {
-    console.log('Fetching tournaments for user:', req.session.account._id);
     const tournaments = await models.Tournament.find({ owner: req.session.account._id })
       .sort({ createdAt: -1 })
       .exec();
 
-    console.log('Found tournaments:', tournaments.length);
     return res.json({ tournaments });
   } catch (err) {
-    console.error('Error fetching tournaments:', err);
     return res.status(400).json({ error: 'Error fetching tournaments' });
   }
 };
@@ -120,7 +190,6 @@ const deleteTournament = async (req, res) => {
     await models.Tournament.deleteOne({ _id: req.body.tournamentId });
     return res.json({ message: 'Tournament deleted successfully' });
   } catch (err) {
-    console.error('Error deleting tournament:', err);
     return res.status(400).json({ error: 'Error deleting tournament' });
   }
 };
@@ -135,7 +204,6 @@ const updateMatch = async (req, res) => {
       return res.status(400).json({ error: 'Match ID required' });
     }
 
-    // Find tournament containing this match
     const tournament = await models.Tournament.findOne({
       'matches._id': matchId,
       owner: req.session.account._id,
@@ -145,18 +213,20 @@ const updateMatch = async (req, res) => {
       return res.status(404).json({ error: 'Match not found' });
     }
 
-    // Update the match
     const matchIndex = tournament.matches.findIndex((match) => match._id.toString() === matchId);
     if (matchIndex === -1) {
       return res.status(404).json({ error: 'Match not found' });
     }
 
-    tournament.matches[matchIndex].score1 = score1;
-    tournament.matches[matchIndex].score2 = score2;
-    tournament.matches[matchIndex].winner = winner;
-    tournament.matches[matchIndex].status = winner ? 'completed' : 'live';
+    // Update match scores
+    const match = tournament.matches[matchIndex];
+    match.score1 = score1;
+    match.score2 = score2;
+    match.winner = winner;
+    match.status = winner ? 'completed' : 'live';
 
-    // Update tournament status
+    await updateSubsequentMatches(tournament, match, winner);
+
     await tournament.save();
 
     return res.json({
@@ -164,7 +234,6 @@ const updateMatch = async (req, res) => {
       tournament,
     });
   } catch (err) {
-    console.error('Error updating match:', err);
     return res.status(400).json({ error: 'Error updating match' });
   }
 };

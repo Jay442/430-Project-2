@@ -3,26 +3,135 @@
   <meta charset="utf-8"/>
   <title>Tournament Bracket Manager</title>
   <link rel="shortcut icon" href="/assets/img/favicon.png"/>
+  <link rel="stylesheet" type="text/css" href="/assets/tailwind.css"/>
   <link rel="stylesheet" type="text/css" href="/assets/style.css"/>
+  <style>
+    .match-connector {
+      position: relative;
+    }
+    
+    .match-connector::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      right: -20px;
+      width: 20px;
+      height: 2px;
+      background: #cbd5e0;
+      z-index: 0;
+    }
+    
+    .match-connector::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      right: 0;
+      width: 2px;
+      height: 100%;
+      background: #cbd5e0;
+      transform: translateY(-50%);
+      z-index: 0;
+    }
+    
+    .bracket-container {
+      min-height: 400px;
+    }
+
+    /* Add this for ad styling */
+    .ad-container {
+      position: fixed;
+      top: 64px; /* Height of navbar */
+      bottom: 0;
+      width: 100px;
+      z-index: 10;
+    }
+    
+    .ad-left {
+      left: 0;
+    }
+    
+    .ad-right {
+      right: 0;
+    }
+    
+    .ad-content {
+      height: 100%;
+      background: linear-gradient(180deg, #e5e7eb 0%, #d1d5db 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      border-right: 1px solid #9ca3af;
+    }
+    
+    .ad-right .ad-content {
+      border-right: none;
+      border-left: 1px solid #9ca3af;
+    }
+    
+    .ad-text {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      font-weight: 600;
+      color: #4b5563;
+      letter-spacing: 2px;
+    }
+    
+    .ad-subtext {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: 20px;
+    }
+    
+    /* Main content adjustment */
+    .main-content {
+      transition: margin 0.3s ease;
+    }
+    
+    .with-ads {
+      margin-left: 100px;
+      margin-right: 100px;
+    }
+  </style>
 </head>
-<body>
-  <nav>
-    <a href="/maker">
-      <span class="app-title">Tournament Manager</span>
-    </a>
-    <div class="navlink">
-      <a href="/profile">Profile</a>
-      <a href="/logout">Log out</a>
+<body class="bg-gray-50">
+  <nav class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg fixed w-full z-20">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+      <a href="/maker" class="flex items-center space-x-2 hover:text-gray-200 transition">
+        <span class="text-xl font-bold">🏆 Tournament Manager</span>
+      </a>
+      <div class="flex items-center space-x-4">
+        <a href="/profile" class="hover:text-gray-200 transition flex items-center space-x-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+          </svg>
+          <span>Profile</span>
+        </a>
+        <a href="/logout" class="hover:text-gray-200 transition flex items-center space-x-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+          <span>Log out</span>
+        </a>
+      </div>
     </div>
   </nav>
 
-  <section id="app">
-  </section>
+  <section id="app" class="pt-16"></section> <!-- Added pt-16 for navbar height -->
 
-  <div id="tournamentMessage" class='hidden'>
-    <img id="speech" src="/assets/img/speech.png" alt="speech box"/>
-    <h3><span id="errorMessage"></span></h3>
-    <img id="tournament" src="assets/img/trophy.jpg" alt="trophy"/>
+  <div id="tournamentMessage" class='hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+    <div class="bg-white rounded-lg p-6 max-w-md mx-4">
+      <img id="speech" src="/assets/img/speech.png" alt="speech box" class="mb-4"/>
+      <h3 class="text-xl font-bold text-gray-800 mb-4"><span id="errorMessage"></span></h3>
+      <img id="tournament" src="assets/img/trophy.jpg" alt="trophy" class="w-full rounded-lg"/>
+      <button onclick="document.getElementById('tournamentMessage').classList.add('hidden')" 
+              class="mt-4 w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+        Close
+      </button>
+    </div>
   </div>
   
   <script src="/assets/appbundle.js"></script>

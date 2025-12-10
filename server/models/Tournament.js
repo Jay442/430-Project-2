@@ -39,6 +39,11 @@ const MatchSchema = new mongoose.Schema({
     type: mongoose.Schema.ObjectId,
     default: null,
   },
+  bracketType: {
+    type: String,
+    enum: ['winners', 'losers', 'grand-finals'],
+    default: 'winners',
+  },
 }, {
   timestamps: true,
 });
@@ -63,7 +68,7 @@ const TournamentSchema = new mongoose.Schema({
   },
   bracketType: {
     type: String,
-    enum: ['single-elimination', 'double-elimination', 'round-robin'],
+    enum: ['single-elimination', 'double-elimination'],
     default: 'single-elimination',
   },
   status: {
@@ -85,55 +90,187 @@ const TournamentSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Static method to generate bracket matches
-TournamentSchema.statics.generateBracket = function (participants, bracketType) {
+// Helper function for single elimination bracket
+const generateSingleEliminationBracket = function (validParticipants) {
   const matches = [];
+  const participantCount = validParticipants.length;
+  const totalRounds = Math.ceil(Math.log2(participantCount));
+  const totalSlots = 2 ** totalRounds;
 
-  if (bracketType === 'single-elimination') {
-    // Calculate number of rounds needed
-    const participantCount = participants.length;
-    const totalSlots = 2 ** Math.ceil(Math.log2(participantCount));
+  // Winners side only due to single elim
+  const shuffled = [...validParticipants];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
 
-    let round = 1;
-    const currentRoundParticipants = [...participants];
+  const bracketParticipants = [...shuffled];
+  while (bracketParticipants.length < totalSlots) {
+    bracketParticipants.push(null);
+  }
 
-    // Add byes
-    while (currentRoundParticipants.length < totalSlots) {
-      currentRoundParticipants.push(null);
+  let matchNumber = 1;
+  for (let i = 0; i < bracketParticipants.length; i += 2) {
+    const match = {
+      player1: bracketParticipants[i],
+      player2: bracketParticipants[i + 1],
+      round: 1,
+      matchNumber: matchNumber++,
+      status: bracketParticipants[i] && bracketParticipants[i + 1] ? 'pending' : 'completed',
+      bracketType: 'winners',
+    };
+
+    if (!bracketParticipants[i] || !bracketParticipants[i + 1]) {
+      match.winner = bracketParticipants[i] || bracketParticipants[i + 1];
+      match.status = 'completed';
     }
 
-    // Generate first round matches
-    let matchNumber = 1;
-    for (let i = 0; i < currentRoundParticipants.length; i += 2) {
+    matches.push(match);
+  }
+
+  let currentRoundMatches = matches.filter((m) => m.round === 1).length;
+  let round = 2;
+
+  while (currentRoundMatches > 1) {
+    const matchesInRound = currentRoundMatches / 2;
+
+    for (let i = 0; i < matchesInRound; i++) {
       matches.push({
-        player1: currentRoundParticipants[i],
-        player2: currentRoundParticipants[i + 1],
+        player1: 'TBD',
+        player2: 'TBD',
         round,
         matchNumber: matchNumber++,
-        status: currentRoundParticipants[i] && currentRoundParticipants[i + 1] ? 'pending' : 'completed',
+        status: 'pending',
+        bracketType: 'winners',
       });
     }
 
-    // Generate subsequent rounds
-    let nextRoundMatchCount = matches.length / 2;
+    currentRoundMatches = matchesInRound;
     round++;
-
-    while (nextRoundMatchCount >= 1) {
-      for (let i = 0; i < nextRoundMatchCount; i++) {
-        matches.push({
-          player1: null,
-          player2: null,
-          round,
-          matchNumber: matchNumber++,
-          status: 'pending',
-        });
-      }
-      nextRoundMatchCount = Math.floor(nextRoundMatchCount / 2);
-      round++;
-    }
   }
 
   return matches;
+};
+
+// Helper function for double elimination bracket
+const generateDoubleEliminationBracket = function (validParticipants) {
+  const matches = [];
+  const participantCount = validParticipants.length;
+  const winnersRounds = Math.ceil(Math.log2(participantCount));
+  const totalSlots = 2 ** winnersRounds;
+
+  const shuffled = [...validParticipants];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const bracketParticipants = [...shuffled];
+  while (bracketParticipants.length < totalSlots) {
+    bracketParticipants.push(null);
+  }
+
+  let matchNumber = 1;
+  const firstRoundMatches = [];
+
+  for (let i = 0; i < bracketParticipants.length; i += 2) {
+    const match = {
+      player1: bracketParticipants[i],
+      player2: bracketParticipants[i + 1],
+      round: 1,
+      matchNumber: matchNumber++,
+      status: bracketParticipants[i] && bracketParticipants[i + 1] ? 'pending' : 'completed',
+      bracketType: 'winners',
+    };
+
+    if (!bracketParticipants[i] || !bracketParticipants[i + 1]) {
+      match.winner = bracketParticipants[i] || bracketParticipants[i + 1];
+      match.status = 'completed';
+    }
+
+    firstRoundMatches.push(match);
+    matches.push(match);
+  }
+
+  let currentWinnersMatches = firstRoundMatches.length;
+  let round = 2;
+
+  while (currentWinnersMatches > 1) {
+    const matchesInRound = currentWinnersMatches / 2;
+
+    for (let i = 0; i < matchesInRound; i++) {
+      matches.push({
+        player1: 'TBD',
+        player2: 'TBD',
+        round,
+        matchNumber: matchNumber++,
+        status: 'pending',
+        bracketType: 'winners',
+      });
+    }
+
+    currentWinnersMatches = matchesInRound;
+    round++;
+  }
+
+  // Losers bracket
+  const losersStartRound = round;
+  const losersRound1Matches = Math.max(1, firstRoundMatches.length / 2);
+  for (let i = 0; i < losersRound1Matches; i++) {
+    matches.push({
+      player1: 'TBD',
+      player2: 'TBD',
+      round: losersStartRound,
+      matchNumber: matchNumber++,
+      status: 'pending',
+      bracketType: 'losers',
+    });
+  }
+
+  let currentLosersMatches = losersRound1Matches;
+  let losersRound = losersStartRound + 1;
+
+  while (currentLosersMatches > 1) {
+    const matchesInRound = Math.ceil(currentLosersMatches / 2);
+
+    for (let i = 0; i < matchesInRound; i++) {
+      matches.push({
+        player1: 'TBD',
+        player2: 'TBD',
+        round: losersRound,
+        matchNumber: matchNumber++,
+        status: 'pending',
+        bracketType: 'losers',
+      });
+    }
+
+    currentLosersMatches = matchesInRound;
+    losersRound++;
+  }
+
+  matches.push({
+    player1: 'TBD',
+    player2: 'TBD',
+    round: losersRound,
+    matchNumber: matchNumber++,
+    status: 'pending',
+    bracketType: 'grand-finals',
+  });
+
+  return matches;
+};
+
+// Static method to generate bracket matches
+TournamentSchema.statics.generateBracket = function (participants, bracketType) {
+  const validParticipants = participants.filter((p) => p !== null && p !== undefined);
+
+  if (bracketType === 'single-elimination') {
+    return generateSingleEliminationBracket(validParticipants);
+  } if (bracketType === 'double-elimination') {
+    return generateDoubleEliminationBracket(validParticipants);
+  }
+
+  return generateSingleEliminationBracket(validParticipants);
 };
 
 // Method to update tournament status
