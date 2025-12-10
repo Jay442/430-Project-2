@@ -1,7 +1,8 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>Tournament Bracket Manager</title>
+  <title>Profile Settings | Tournament Manager</title>
   <link rel="shortcut icon" href="/assets/img/favicon.png"/>
   <link rel="stylesheet" type="text/css" href="/assets/style.css"/>
 </head>
@@ -11,12 +12,18 @@
       <span class="app-title">Tournament Manager</span>
     </a>
     <div class="navlink">
-      <a href="/profile">Profile</a>
+      <a href="/maker">Dashboard</a>
+    </div>
+    <div class="navlink">
       <a href="/logout">Log out</a>
     </div>
   </nav>
+    
+    <div class="profile-content">
+      <h1>Change Password</h1>
 
-  <section id="app">
+      <div id="password-section"></div>
+    </div>
   </section>
 
   <div id="tournamentMessage" class='hidden'>
@@ -25,6 +32,6 @@
     <img id="tournament" src="assets/img/trophy.jpg" alt="trophy"/>
   </div>
   
-  <script src="/assets/appbundle.js"></script>
+  <script src="/assets/profilebundle.js"></script>
 </body>
 </html>

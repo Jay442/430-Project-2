@@ -17,13 +17,13 @@ const handleTournament = (e, onTournamentAdded) => {
         return false;
     }
 
-    helper.sendPost(e.target.action, { 
-        name, 
-        game, 
+    helper.sendPost(e.target.action, {
+        name,
+        game,
         maxParticipants: parseInt(maxParticipants),
-        bracketType 
+        bracketType
     }, onTournamentAdded);
-    
+
     return false;
 };
 
@@ -39,20 +39,20 @@ const TournamentForm = (props) => {
             <h2>Create New Tournament</h2>
             <label htmlFor='name'>Tournament Name: </label>
             <input id='tournamentName' type="text" name='name' placeholder='Enter tournament name' />
-            
+
             <label htmlFor='game'>Game: </label>
             <input id='tournamentGame' type="text" name='game' placeholder='e.g., Street Fighter, Valorant' />
-            
+
             <label htmlFor='maxParticipants'>Max Participants: </label>
             <input id='maxParticipants' type="number" min='2' max='128' name='maxParticipants' defaultValue='8' />
-            
+
             <label htmlFor='bracketType'>Bracket Type: </label>
             <select id='bracketType' name='bracketType'>
                 <option value='single-elimination'>Single Elimination</option>
                 <option value='double-elimination'>Double Elimination</option>
                 <option value='round-robin'>Round Robin</option>
             </select>
-            
+
             <input className='makeTournamentSubmit' type='submit' value='Create Tournament' />
         </form>
     );
@@ -89,9 +89,9 @@ const Match = ({ match, onUpdateScore }) => {
                     {!isEditing ? (
                         <span className="score">{match.score1 !== null && match.score1 !== undefined ? match.score1 : '-'}</span>
                     ) : (
-                        <input 
-                            type="number" 
-                            value={score1} 
+                        <input
+                            type="number"
+                            value={score1}
                             onChange={(e) => setScore1(e.target.value)}
                             className="score-input"
                         />
@@ -103,9 +103,9 @@ const Match = ({ match, onUpdateScore }) => {
                     {!isEditing ? (
                         <span className="score">{match.score2 !== null && match.score2 !== undefined ? match.score2 : '-'}</span>
                     ) : (
-                        <input 
-                            type="number" 
-                            value={score2} 
+                        <input
+                            type="number"
+                            value={score2}
                             onChange={(e) => setScore2(e.target.value)}
                             className="score-input"
                         />
@@ -129,9 +129,9 @@ const BracketRound = ({ round, onUpdateScore }) => {
             <h3>{round.name}</h3>
             <div className="matches">
                 {round.matches.map(match => (
-                    <Match 
-                        key={match._id} 
-                        match={match} 
+                    <Match
+                        key={match._id}
+                        match={match}
                         onUpdateScore={onUpdateScore}
                     />
                 ))}
@@ -233,9 +233,9 @@ const TournamentList = (props) => {
         }
 
         const roundNodes = Object.values(rounds).map(round => (
-            <BracketRound 
-                key={round.name} 
-                round={round} 
+            <BracketRound
+                key={round.name}
+                round={round}
                 onUpdateScore={updateMatchScore}
             />
         ));
@@ -249,7 +249,7 @@ const TournamentList = (props) => {
                     <span className="tournamentStatus">Status: {tournament.status}</span>
                     <span className="tournamentParticipants">Participants: {tournament.participants ? tournament.participants.length : 0}</span>
                 </div>
-                
+
                 {roundNodes.length > 0 ? (
                     <div className="bracket-container">
                         {roundNodes}
@@ -259,7 +259,7 @@ const TournamentList = (props) => {
                         <p>No bracket generated yet. This tournament is empty.</p>
                     </div>
                 )}
-                
+
                 <div className="tournament-actions">
                     <button
                         className='deleteTournamentBtn'
@@ -279,9 +279,122 @@ const TournamentList = (props) => {
     );
 };
 
+const ChangePasswordForm = () => {
+    const [formData, setFormData] = useState({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+    });
+    const [message, setMessage] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setMessage('');
+
+        if (formData.newPassword !== formData.confirmPassword) {
+            setMessage('New passwords do not match!');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const response = await fetch('/changePassword', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                setMessage(result.error);
+            } else {
+                setMessage('Password changed successfully!');
+                setFormData({
+                    currentPassword: '',
+                    newPassword: '',
+                    confirmPassword: ''
+                });
+            }
+        } catch (err) {
+            setMessage('An error occurred. Please try again.');
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="change-password-form">
+            <h3>Change Password</h3>
+            <form onSubmit={handleSubmit}>
+                <div className="form-group">
+                    <label htmlFor="currentPassword">Current Password</label>
+                    <input
+                        type="password"
+                        id="currentPassword"
+                        name="currentPassword"
+                        value={formData.currentPassword}
+                        onChange={handleChange}
+                        required
+                    />
+                </div>
+
+                <div className="form-group">
+                    <label htmlFor="newPassword">New Password</label>
+                    <input
+                        type="password"
+                        id="newPassword"
+                        name="newPassword"
+                        value={formData.newPassword}
+                        onChange={handleChange}
+                        required
+                        minLength="6"
+                    />
+                </div>
+
+                <div className="form-group">
+                    <label htmlFor="confirmPassword">Confirm New Password</label>
+                    <input
+                        type="password"
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        required
+                        minLength="6"
+                    />
+                </div>
+
+                <button type="submit" disabled={isLoading}>
+                    {isLoading ? 'Changing...' : 'Change Password'}
+                </button>
+
+                {message && (
+                    <div className={`message ${message.includes('successfully') ? 'success' : 'error'}`}>
+                        {message}
+                    </div>
+                )}
+            </form>
+        </div>
+    );
+};
+
 // Main App component
 const App = () => {
     const [reloadTournaments, setReloadTournaments] = useState(false);
+    const [showPasswordForm, setShowPasswordForm] = useState(false);
 
     const triggerReload = () => {
         setReloadTournaments(prev => !prev);
@@ -292,11 +405,23 @@ const App = () => {
             <div id='makeTournament'>
                 <TournamentForm triggerReload={triggerReload} />
             </div>
+
+            <div className="account-section">
+                <button
+                    className="btn-account"
+                    onClick={() => setShowPasswordForm(!showPasswordForm)}
+                >
+                    {showPasswordForm ? 'Hide Password Form' : 'Change Password'}
+                </button>
+
+                {showPasswordForm && <ChangePasswordForm />}
+            </div>
+
             <div id='tournaments'>
-                <TournamentList 
-                    tournaments={[]} 
-                    reloadTournaments={reloadTournaments} 
-                    triggerReload={triggerReload} 
+                <TournamentList
+                    tournaments={[]}
+                    reloadTournaments={reloadTournaments}
+                    triggerReload={triggerReload}
                 />
             </div>
         </div>
