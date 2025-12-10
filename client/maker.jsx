@@ -271,7 +271,7 @@ const TournamentForm = ({ triggerReload, showToast }) => {
     );
 };
 
-// Create bracket rounds based on the inputed tournment params
+// Create bracket rounds based on the inputed tournament params
 const generateBracketRounds = (matches, maxParticipants, bracketType) => {
     const rounds = {};
 
@@ -288,9 +288,10 @@ const generateBracketRounds = (matches, maxParticipants, bracketType) => {
         if (!rounds[match.round]) {
             let roundName = `Round ${match.round}`;
             let isLosersBracket = false;
+            let displayRoundNumber = match.round;
 
             const matchBracketType = match.bracketType || 'winners';
-            
+
             if (bracketType === 'single-elimination') {
                 const totalRounds = Math.ceil(Math.log2(maxParticipants));
                 if (match.round === totalRounds) roundName = 'Finals';
@@ -300,27 +301,43 @@ const generateBracketRounds = (matches, maxParticipants, bracketType) => {
             } else if (bracketType === 'double-elimination') {
                 if (matchBracketType === 'losers') {
                     isLosersBracket = true;
-                    const losersRoundNum = match.round;
-                    
-                    const winnersRounds = Math.ceil(Math.log2(maxParticipants));
-                    const losersActualRound = losersRoundNum - winnersRounds;
-                    
-                    if (losersRoundNum === Math.max(...matches.map(m => m.round))) {
-                        roundName = 'Grand Finals';
-                    } else if (losersActualRound === 1) {
-                        roundName = 'Losers Round 1';
-                    } else if (losersActualRound === 2) {
-                        roundName = 'Losers Round 2';
+
+                    // FIXED: Get all losers rounds sorted from most negative to least negative
+                    const losersMatches = matches.filter(m => m.bracketType === 'losers');
+                    const losersRounds = [...new Set(losersMatches.map(m => m.round))].sort((a, b) => a - b);
+                    // This gives: [-4, -3, -2, -1] for 8-person (most negative to least negative)
+
+                    // Find position: -1 should be Losers Round 1, -4 should be Losers Finals
+                    const roundIndex = losersRounds.indexOf(match.round);
+                    const totalLosersRounds = losersRounds.length;
+
+                    // Calculate correct display position:
+                    // -1: index 3 -> 4 - 3 = 1 (Losers Round 1)
+                    // -4: index 0 -> 4 - 0 = 4 (Losers Finals)
+                    const displayPosition = totalLosersRounds - roundIndex;
+
+                    // Name the rounds correctly
+                    if (displayPosition === totalLosersRounds) {
+                        roundName = 'Losers Finals';
+                        displayRoundNumber = 'F';
+                    } else if (displayPosition === totalLosersRounds - 1 && totalLosersRounds >= 4) {
+                        roundName = 'Losers Semi-Finals';
+                        displayRoundNumber = 'SF';
+                    } else if (displayPosition === totalLosersRounds - 2 && totalLosersRounds >= 5) {
+                        roundName = 'Losers Quarter-Finals';
+                        displayRoundNumber = 'QF';
                     } else {
-                        roundName = `Losers Round ${losersActualRound}`;
+                        roundName = `Losers Round ${displayPosition}`;
+                        displayRoundNumber = displayPosition;
                     }
                 } else if (matchBracketType === 'grand-finals') {
                     isLosersBracket = true;
                     roundName = 'Grand Finals';
+                    displayRoundNumber = 'GF';
                 } else {
                     isLosersBracket = false;
                     const winnersRounds = Math.ceil(Math.log2(maxParticipants));
-                    
+
                     if (match.round === winnersRounds) roundName = 'Winners Finals';
                     else if (match.round === winnersRounds - 1) roundName = 'Winners Semi-Finals';
                     else if (match.round === winnersRounds - 2) roundName = 'Winners Quarter-Finals';
@@ -331,7 +348,10 @@ const generateBracketRounds = (matches, maxParticipants, bracketType) => {
             rounds[match.round] = {
                 name: roundName,
                 matches: [],
-                isLosersBracket: isLosersBracket
+                isLosersBracket: isLosersBracket,
+                bracketType: matchBracketType,
+                displayRound: displayRoundNumber,
+                originalRound: match.round  // Keep original for sorting
             };
         }
         rounds[match.round].matches.push(match);
@@ -371,6 +391,21 @@ const Match = ({ match, onUpdateScore, isFirstInRound, isLastInRound, showToast 
         return 'W';
     };
 
+    // Calculate display round 
+    const getDisplayRound = () => {
+         if (match.bracketType === 'grand-finals') {
+        return 'Grand Finals';
+    }
+    if (match.bracketType === 'losers' && match.round < 0) {
+        // We need to calculate the same way as generateBracketRounds
+        // For now, just show the absolute value
+        return Math.abs(match.round);
+    }
+    return match.round;
+    };
+
+    const displayRound = getDisplayRound();
+
     return (
         <div className={`relative ${isFirstInRound ? 'mt-0' : 'mt-8'}`}>
             {!isLastInRound && (
@@ -384,7 +419,7 @@ const Match = ({ match, onUpdateScore, isFirstInRound, isLastInRound, showToast 
             <div className={`bg-white rounded-lg border-2 ${match.winner ? 'border-green-500 shadow-lg' : 'border-gray-200 shadow'} p-4 min-w-[280px] transition-all hover:shadow-md`}>
                 <div className="flex justify-between items-center mb-3">
                     <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                        {getBracketTypeLabel()} • Round {match.round} • Match {match.matchNumber}
+                        {getBracketTypeLabel()} • {typeof displayRound === 'string' ? displayRound : `Round ${displayRound}`} • Match {match.matchNumber}
                     </span>
                     {match.status === 'completed' && (
                         <span className="text-xs font-semibold text-green-600 bg-green-100 px-2 py-1 rounded">
@@ -511,13 +546,18 @@ const BracketRound = ({ round, matches, onUpdateScore, showToast }) => {
                     <h3 className={`text-lg font-bold ${bracketType === 'losers' ? 'text-red-700' : 'text-gray-800'}`}>
                         {round.name}
                     </h3>
-                    {bracketType === 'losers' && (
+                    {bracketType === 'losers' && round.bracketType !== 'grand-finals' && (
                         <span className="ml-2 px-2 py-1 text-xs font-semibold bg-red-100 text-red-800 rounded">
                             Losers Bracket
                         </span>
                     )}
+                    {round.bracketType === 'grand-finals' && (
+                        <span className="ml-2 px-2 py-1 text-xs font-semibold bg-purple-100 text-purple-800 rounded">
+                            Grand Finals
+                        </span>
+                    )}
                 </div>
-                <p className="text-sm text-gray-500">{matches.length} matches</p>
+                <p className="text-sm text-gray-500">{matches.length} match{matches.length !== 1 ? 'es' : ''}</p>
             </div>
             <div className="space-y-0">
                 {matches.map((match, index) => (
@@ -546,21 +586,11 @@ const TournamentCard = ({ tournament, onDelete, onUpdateScore, showToast }) => {
             console.log('Bracket type:', tournament.bracketType);
             console.log('Max participants:', tournament.maxParticipants);
             console.log('Total matches:', tournament.matches?.length || 0);
-            
-            const matchesByBracket = {};
-            tournament.matches?.forEach(match => {
-                const type = match.bracketType || 'winners';
-                if (!matchesByBracket[type]) matchesByBracket[type] = [];
-                matchesByBracket[type].push(match);
+
+            // Log each match
+            tournament.matches?.forEach((match, index) => {
+                console.log(`${index}: R${match.round} M${match.matchNumber} [${match.bracketType}]: ${match.player1} vs ${match.player2}`);
             });
-            console.log('Matches by bracket type:', matchesByBracket);
-            
-            const matchesByRound = {};
-            tournament.matches?.forEach(match => {
-                if (!matchesByRound[match.round]) matchesByRound[match.round] = [];
-                matchesByRound[match.round].push(match);
-            });
-            console.log('Matches by round:', matchesByRound);
         }
     }, [isExpanded, tournament]);
 
@@ -570,16 +600,51 @@ const TournamentCard = ({ tournament, onDelete, onUpdateScore, showToast }) => {
         tournament.bracketType
     );
 
+    // Debug the rounds structure
+    useEffect(() => {
+        if (isExpanded) {
+            console.log('\n=== ROUNDS STRUCTURE IN UI ===');
+            Object.entries(rounds).forEach(([key, round]) => {
+                console.log(`Round ${key}: "${round.name}" (losers: ${round.isLosersBracket}, bracketType: ${round.bracketType})`);
+            });
+        }
+    }, [isExpanded, rounds]);
+
+    // FIX: Separate winners, losers, and grand-finals rounds properly
     const winnersRounds = {};
     const losersRounds = {};
+    const grandFinalsRound = {};
 
     Object.entries(rounds).forEach(([roundNumber, roundData]) => {
-        if (roundData.isLosersBracket) {
+        if (roundData.bracketType === 'grand-finals') {
+            grandFinalsRound[roundNumber] = roundData;
+        } else if (roundData.isLosersBracket) {
             losersRounds[roundNumber] = roundData;
         } else {
             winnersRounds[roundNumber] = roundData;
         }
     });
+
+    console.log('\n=== SEPARATED ROUNDS ===');
+    console.log('Winners rounds keys:', Object.keys(winnersRounds));
+    console.log('Losers rounds keys:', Object.keys(losersRounds));
+    console.log('Grand Finals keys:', Object.keys(grandFinalsRound));
+
+    // Sort winners rounds ascending (1, 2, 3...)
+    const sortedWinnersRounds = Object.entries(winnersRounds)
+        .sort(([a], [b]) => Number(a) - Number(b));
+
+    // Sort losers rounds ascending (-4, -3, -2, -1) for 8-person bracket
+    // This puts earliest round (-4) first, latest round (-1) last
+    const sortedLosersRounds = Object.entries(losersRounds)
+        .sort(([a], [b]) => Number(b) - Number(a));
+
+    // Grand finals should be separate
+    const sortedGrandFinals = Object.entries(grandFinalsRound)
+        .sort(([a], [b]) => Number(a) - Number(b));
+
+    console.log('Sorted losers rounds:', sortedLosersRounds.map(([key]) => key));
+    console.log('Grand Finals rounds:', sortedGrandFinals.map(([key]) => key));
 
     return (
         <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-6 border border-gray-200 hover:shadow-xl transition-shadow">
@@ -649,14 +714,14 @@ const TournamentCard = ({ tournament, onDelete, onUpdateScore, showToast }) => {
                 <div className="p-6 bg-gradient-to-br from-gray-50 to-white">
                     {Object.keys(rounds).length > 0 ? (
                         <div>
-                            {Object.keys(winnersRounds).length > 0 && (
+                            {sortedWinnersRounds.length > 0 && (
                                 <div className="mb-8">
                                     <h4 className="text-xl font-bold text-gray-800 mb-4">
                                         {tournament.bracketType === 'double-elimination' ? 'Winners Bracket' : 'Main Bracket'}
                                     </h4>
                                     <div className="overflow-x-auto">
                                         <div className="flex space-x-8 min-w-max pb-4">
-                                            {Object.entries(winnersRounds).map(([roundNumber, roundData]) => (
+                                            {sortedWinnersRounds.map(([roundNumber, roundData]) => (
                                                 <BracketRound
                                                     key={`winners-${roundNumber}`}
                                                     round={roundData}
@@ -670,14 +735,33 @@ const TournamentCard = ({ tournament, onDelete, onUpdateScore, showToast }) => {
                                 </div>
                             )}
 
-                            {Object.keys(losersRounds).length > 0 && (
-                                <div>
+                            {sortedLosersRounds.length > 0 && (
+                                <div className="mb-8">
                                     <h4 className="text-xl font-bold text-gray-800 mb-4">Losers Bracket</h4>
                                     <div className="overflow-x-auto">
                                         <div className="flex space-x-8 min-w-max pb-4">
-                                            {Object.entries(losersRounds).map(([roundNumber, roundData]) => (
+                                            {sortedLosersRounds.map(([roundNumber, roundData]) => (
                                                 <BracketRound
                                                     key={`losers-${roundNumber}`}
+                                                    round={roundData}
+                                                    matches={roundData.matches}
+                                                    onUpdateScore={onUpdateScore}
+                                                    showToast={showToast}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {sortedGrandFinals.length > 0 && (
+                                <div className="mt-8 pt-8 border-t border-gray-200">
+                                    <h4 className="text-xl font-bold text-gray-800 mb-4">Grand Finals</h4>
+                                    <div className="overflow-x-auto">
+                                        <div className="flex space-x-8 min-w-max pb-4">
+                                            {sortedGrandFinals.map(([roundNumber, roundData]) => (
+                                                <BracketRound
+                                                    key={`grandfinals-${roundNumber}`}
                                                     round={roundData}
                                                     matches={roundData.matches}
                                                     onUpdateScore={onUpdateScore}
@@ -771,11 +855,11 @@ const TournamentList = ({ reloadTournaments, triggerReload, showToast }) => {
                 showToast(result.error, 'error');
             } else {
                 showToast('Score updated successfully!', 'success');
-                
+
                 const updatedTournament = result.tournament;
-                
-                setTournaments(prevTournaments => 
-                    prevTournaments.map(t => 
+
+                setTournaments(prevTournaments =>
+                    prevTournaments.map(t =>
                         t._id === updatedTournament._id ? updatedTournament : t
                     )
                 );
