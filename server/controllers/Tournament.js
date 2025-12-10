@@ -13,7 +13,6 @@ const updateSubsequentMatches = async (tournament, match, winner) => {
   console.log(`Winner: ${winner}`);
 
   if (tournament.bracketType === 'single-elimination') {
-
     const nextRound = round + 1;
     const nextMatchNum = Math.ceil(matchNumber / 2);
     const slot = (matchNumber % 2 === 1) ? 'player1' : 'player2';
@@ -71,16 +70,38 @@ const updateSubsequentMatches = async (tournament, match, winner) => {
         if (nextWinnersMatch.player1 !== 'TBD' && nextWinnersMatch.player2 !== 'TBD') {
           nextWinnersMatch.status = 'pending';
         }
+      } else {
+        // No next winners match - this is Winners Finals winner, goes to Grand Finals
+        console.log(`No next winners match found. ${winner} is Winners Finals champion!`);
+        const grandFinalsMatch = tournament.matches.find((m) => m.bracketType === 'grand-finals');
+
+        if (grandFinalsMatch) {
+          grandFinalsMatch.player1 = winner; 
+          console.log(`Set Grand Finals player1 to ${winner}`);
+
+          if (grandFinalsMatch.player1 !== 'TBD' && grandFinalsMatch.player2 !== 'TBD') {
+            grandFinalsMatch.status = 'pending';
+          }
+        }
       }
 
       // 2. Loser goes to losers bracket
       if (loser && loser !== 'TBD') {
         console.log(`Sending loser ${loser} to losers bracket`);
 
-        const targetLosersRound = -round;
+         let targetLosersRound
+        // Goofy formula to determine late winner's side loser's placement
+        // LosersRound = winnersRound + (winnersRound - 2), minimum 1
+        if (round < 3) {
+          targetLosersRound = -round;
+        }
+        else {
+          targetLosersRound = (round + (round - 2))*-1;
+        }
+        
         console.log(`Looking for losers match in Round ${targetLosersRound} (display: ${Math.abs(targetLosersRound)})`);
         const losersMatch = tournament.matches.find((m) => m.bracketType === 'losers'
-          && m.round === round 
+          && m.round === targetLosersRound
           && (m.player1 === 'TBD' || m.player2 === 'TBD'));
 
         if (losersMatch) {
@@ -89,7 +110,7 @@ const updateSubsequentMatches = async (tournament, match, winner) => {
           if (losersMatch.player1 === 'TBD') {
             losersMatch.player1 = loser;
             console.log(`Set player1 to ${loser}`);
-          } else {
+          } else if (losersMatch.player2 === 'TBD') {
             losersMatch.player2 = loser;
             console.log(`Set player2 to ${loser}`);
           }
@@ -125,14 +146,12 @@ const updateSubsequentMatches = async (tournament, match, winner) => {
 
       console.log(`Winner should go to: Losers R${nextLosersRound} M${nextLosersMatchNum} (${losersSlot})`);
 
-      const nextLosersMatch = tournament.matches.find(m =>
-        m.bracketType === 'losers' &&
-        m.round === nextLosersRound &&
-        m.matchNumber === nextLosersMatchNum
-      );
+      const nextLosersMatch = tournament.matches.find((m) => m.bracketType === 'losers'
+        && m.round === nextLosersRound
+        && m.matchNumber === nextLosersMatchNum);
 
       if (nextLosersMatch) {
-        if (losersSlot === 'player1') {
+        if (losersSlot === 'player1' && nextLosersMatch.player1 === 'TBD') {
           nextLosersMatch.player1 = winner;
         } else {
           nextLosersMatch.player2 = winner;
@@ -146,15 +165,13 @@ const updateSubsequentMatches = async (tournament, match, winner) => {
         console.log(`No next losers match found at round ${nextLosersRound}. ${winner} might go to Grand Finals`);
 
         // Check if this is Losers Finals (most negative round)
-        const allLosersMatches = tournament.matches.filter(m => m.bracketType === 'losers');
-        const minLosersRound = Math.min(...allLosersMatches.map(m => m.round));
+        const allLosersMatches = tournament.matches.filter((m) => m.bracketType === 'losers');
+        const minLosersRound = Math.min(...allLosersMatches.map((m) => m.round));
 
         if (round === minLosersRound) {
           // This is Losers Finals winner, goes to Grand Finals
           console.log(`${winner} is Losers Finals winner, going to Grand Finals`);
-          const grandFinalsMatch = tournament.matches.find(m =>
-            m.bracketType === 'grand-finals'
-          );
+          const grandFinalsMatch = tournament.matches.find((m) => m.bracketType === 'grand-finals');
 
           if (grandFinalsMatch) {
             // Losers bracket winner goes to player2 slot in Grand Finals
@@ -166,7 +183,7 @@ const updateSubsequentMatches = async (tournament, match, winner) => {
             }
           }
         } else {
-          console.log(`ERROR: No next match found but this isn't Losers Finals!`);
+          console.log('ERROR: No next match found but this isn\'t Losers Finals!');
         }
       }
     }
